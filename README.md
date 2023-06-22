@@ -54,11 +54,7 @@ The Jupyter Notebook application will then open in your default web browser to t
 ------
 ## Jupyter Notebooks
 ### CSLC
-<<<<<<< HEAD
-The OPERA CSLC product provides geocoded burst-wise complex data containing both the amplitude and phase information from Sentinel-1 (S1). More information about OPERA CSLC is available at https://www.jpl.nasa.gov/go/opera/products/cslc-product-suite. Also refer to the CSLC Product white paper [[here](https://d2pn8kiwq2w21t.cloudfront.net/documents/finalCSLC_URS310287.pdf)] for high-level information.
-=======
 The OPERA CSLC-S1 product provides geocoded burst-wise complex data containing both the amplitude and phase information from Sentinel-1 (S1). More information about OPERA CSLC-S1 is available at https://www.jpl.nasa.gov/go/opera/products/cslc-product-suite. Also refer to the CSLC Product white paper [[here](https://d2pn8kiwq2w21t.cloudfront.net/documents/finalCSLC_URS310287.pdf)] for high-level information.
->>>>>>> remotes/upstream/main
 
 Below describes the subdirectories within the CSLC folder.
 

@@ -2,6 +2,7 @@
 import math
 import xarray as xr
 import rasterio as rio
+from rasterio.merge import merge
 import rioxarray
 import hvplot.xarray
 import geoviews as gv
@@ -255,3 +256,36 @@ def handle_draw(target, action, geo_json):
     #print('AOI is valid and has boundaries of ', user_poly_proj3857.bounds, 'Please proceed to the next cell.')
     #user_AOI.append((user_poly, user_poly_proj3857))  #for various reasons, we need user AOI in GCS and EPSG 3857
     #return user_poly_proj3857
+
+def merge_rasters(input_files, output_file):
+    """
+    Function to take a list of raster tiles, mosaic them using rasterio, and output the file.
+
+    :param input_files: list of input raster files 
+
+    """
+
+    # Open the input rasters and retrieve metadata
+    src_files = [rio.open(file) for file in input_files]
+    meta = src_files[0].meta
+    
+    #mosaic the src_files
+    mosaic, out_trans = merge(src_files)
+
+    # Update the metadata
+    out_meta = meta.copy()
+    out_meta.update({"driver": "GTiff", 
+                    "height": mosaic.shape[1],
+                    "width": mosaic.shape[2], 
+                    "transform": out_trans
+                    }
+                    )
+
+    with rio.open(output_file, 'w', **out_meta) as dst:
+        dst.write(mosaic)
+
+    #Close the input rasters
+    for src in src_files:
+        src.close()
+    
+    return mosaic

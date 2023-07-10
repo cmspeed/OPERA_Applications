@@ -228,41 +228,14 @@ def getbasemaps():
 
     return basemaps
 
-def gcs_to_proj(poly):
-    """
-    Function for reprojecting polygon shapely object from geographic coordinates (EPSG:4326) 
-    to Web Mercator (EPSG: 3857)). 
-    
-    :param poly: shapely polygon for user area of interest (AOI)
-    """
-    wgs84 = pyproj.CRS("EPSG:4326")
-    web_mercator = pyproj.CRS("EPSG:3857")
-    project = pyproj.Transformer.from_crs(wgs84, web_mercator, always_xy=True).transform
-    user_poly_proj3857 = transform(project, poly)
-    return(user_poly_proj3857)
-
 def handle_draw(target, action, geo_json):
-    """
-    Functionality to draw area of interest (AOI) on interactive ipyleaflet map.
-    
-    :param extent_epsg3857: polygon for user-defined AOI
-    :param usgs_3dep_dataset_name: name of 3DEP dataset which AOI overlaps
-    :param resolution: The desired resolution of the pointcloud based on the following definition:
-    """
-    user_AOI = []
-    geom = dict(geo_json['geometry'])
-    #user_poly = shape(geom)
-    #user_poly_proj3857 = gcs_to_proj(user_poly)
-    #print('AOI is valid and has boundaries of ', user_poly_proj3857.bounds, 'Please proceed to the next cell.')
-    #user_AOI.append((user_poly, user_poly_proj3857))  #for various reasons, we need user AOI in GCS and EPSG 3857
-    #return user_poly_proj3857
+
+    return
 
 def merge_rasters(input_files, output_file):
     """
     Function to take a list of raster tiles, mosaic them using rasterio, and output the file.
-
     :param input_files: list of input raster files 
-
     """
 
     # Open the input rasters and retrieve metadata

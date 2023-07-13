@@ -5,6 +5,7 @@ import rasterio as rio
 from rasterio.merge import merge
 import rioxarray
 import hvplot.xarray
+from osgeo import gdal
 import geoviews as gv
 import pyproj
 import numpy as np
@@ -262,3 +263,64 @@ def merge_rasters(input_files, output_file):
         src.close()
     
     return mosaic
+
+def make_false_color(filepath, bandlist, filename):
+    
+    print("loading cog bands into memory")
+
+    for i,b in enumerate(bandlist):
+        band = filepath+b+'.tif'
+
+        #get transform/crs
+        if i == 0:
+            with rio.open(band, mode='r') as src:
+                transform = src.transform
+                crs = src.crs
+                
+        #load bands  
+        if b == "B05":
+            data = gdal.Open(band)
+            nir = data.GetRasterBand(1).ReadAsArray() 
+        if b == "B03":
+            data = gdal.Open(band)
+            green = data.GetRasterBand(1).ReadAsArray() 
+        if b == "B02":
+            data = gdal.Open(band)
+            blue = data.GetRasterBand(1).ReadAsArray()
+
+    ds = None
+
+    nirClipped = clipPercentile(nir)
+    greenClipped = clipPercentile(green)
+    blueClipped = clipPercentile(blue)
+                
+    nirClipped_scaled = scaleto255(nirClipped)
+    greenClipped_scaled = scaleto255(greenClipped)
+    blueClipped_scaled = scaleto255(blueClipped)
+
+    cube = np.stack((nirClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
+
+    NBG_dataset = rio.open(
+        str(filename),
+        'w',
+        driver='GTiff',
+        height=cube.shape[1],
+        width=cube.shape[2],
+        count=3,
+        dtype=cube.dtype,
+        crs=crs,
+        transform=transform
+    )
+
+    NBG_dataset.write(cube)
+    NBG_dataset.close() 
+
+    print(filename+' written successfully.')
+    return
+
+
+def scaleto255(x):
+    return(((x - np.nanmin(x))) * (255/(np.nanmax(x)-np.nanmin(x))))
+
+def clipPercentile(x):
+    return(np.clip(x, np.nanpercentile(x, 2), np.nanpercentile(x,98)))

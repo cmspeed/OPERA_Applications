@@ -264,7 +264,62 @@ def merge_rasters(input_files, output_file):
     
     return mosaic
 
-def make_false_color(filepath, bandlist, filename):
+def make_hls_truecolor(filepath, bandlist, filename):
+    
+    print('making hls true color rendering...')
+
+    for i,b in enumerate(bandlist):
+        band = filepath+b+'.tif'
+
+        #get transform/crs
+        if i == 0:
+            with rio.open(band, mode='r') as src:
+                transform = src.transform
+                crs = src.crs
+                
+        #load bands  
+        if b == "B04":
+            data = gdal.Open(band)
+            red = data.GetRasterBand(1).ReadAsArray()
+        if b == "B03":
+            data = gdal.Open(band)
+            green = data.GetRasterBand(1).ReadAsArray() 
+        if b == "B02":
+            data = gdal.Open(band)
+            blue = data.GetRasterBand(1).ReadAsArray()
+
+    data = None
+
+    redClipped = clipPercentile(red)
+    greenClipped = clipPercentile(green)
+    blueClipped = clipPercentile(blue)
+                
+    redClipped_scaled = scaleto255(redClipped)
+    greenClipped_scaled = scaleto255(greenClipped)
+    blueClipped_scaled = scaleto255(blueClipped)
+    
+    cube = np.stack((redClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
+
+    RGB_dataset = rio.open(
+        str(filename),
+        'w',
+        driver='GTiff',
+        height=cube.shape[1],
+        width=cube.shape[2],
+        count=3,
+        dtype=cube.dtype,
+        crs=crs,
+        transform=transform
+    )
+
+    RGB_dataset.write(cube)
+    RGB_dataset.close() 
+
+    print(filename+' written successfully.')
+    return              
+
+
+def make_hls_false_color(filepath, bandlist, filename):
     
     print('making false color rendering...')
 
@@ -278,9 +333,9 @@ def make_false_color(filepath, bandlist, filename):
                 crs = src.crs
                 
         #load bands  
-        if b == "B05":
+        if b == "B05" or b =="B8A":
             data = gdal.Open(band)
-            nir = data.GetRasterBand(1).ReadAsArray() 
+            nir = data.GetRasterBand(1).ReadAsArray()
         if b == "B03":
             data = gdal.Open(band)
             green = data.GetRasterBand(1).ReadAsArray() 
@@ -288,7 +343,7 @@ def make_false_color(filepath, bandlist, filename):
             data = gdal.Open(band)
             blue = data.GetRasterBand(1).ReadAsArray()
 
-    ds = None
+    data = None
 
     nirClipped = clipPercentile(nir)
     greenClipped = clipPercentile(green)
@@ -316,6 +371,68 @@ def make_false_color(filepath, bandlist, filename):
     NBG_dataset.close() 
 
     print(filename+' written successfully.')
+    return
+
+def make_hls_ndvi(filepath, bandlist, filename):
+    
+    print('making ndvi rendering...')
+
+    for i,b in enumerate(bandlist):
+            
+            band = filepath+b+'.tif'
+            
+            #get transform/crs
+            if i == 0:
+                with rio.open(band, mode='r') as src:
+                    transform = src.transform
+                    crs = src.crs  
+            #load bands  
+            if b == "B05" or b == "B8A":
+                data = gdal.Open(band)
+                nir = data.GetRasterBand(1).ReadAsArray()
+            elif b == "B04":
+                data = gdal.Open(band)
+                red = data.GetRasterBand(1).ReadAsArray()
+            elif b == "B03":
+                data = gdal.Open(band)
+                green = data.GetRasterBand(1).ReadAsArray() 
+            elif b == "B02":
+                data = gdal.Open(band)
+                blue = data.GetRasterBand(1).ReadAsArray()
+    
+    if (nir is not None) & (red is not None):
+
+        #compute NDVI
+        ndvi = (nir - red) / (nir + red)
+        mask = (ndvi > 0) & (ndvi < 1)
+        ndvi_cor = np.ma.masked_array(ndvi, ~mask)
+        
+        ndviClipped = clipPercentile(ndvi_cor)
+        ndviClipped_scaled = scaleto255(ndviClipped)
+
+        # Reshape the array
+        cube = np.reshape(ndviClipped_scaled, (1, ndviClipped_scaled.shape[0], ndviClipped_scaled.shape[1])).astype('uint8')
+        
+        NDVI_dataset = rio.open(
+            str(filename),
+            'w',
+            driver='GTiff',
+            height=cube.shape[1],
+            width=cube.shape[2],
+            count=1,
+            dtype=cube.dtype,
+            crs=crs,
+            transform=transform
+        )
+
+        NDVI_dataset.write(cube)
+        NDVI_dataset.close() 
+
+        print(filename+' written successfully.')
+        
+    else:
+        print('missing necessary bands to compute ndvi.')
+    
     return
 
 def scaleto255(x):

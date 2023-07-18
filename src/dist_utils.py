@@ -266,7 +266,7 @@ def merge_rasters(input_files, output_file):
 
 def make_false_color(filepath, bandlist, filename):
     
-    print("loading cog bands into memory")
+    print('making false color rendering...')
 
     for i,b in enumerate(bandlist):
         band = filepath+b+'.tif'
@@ -317,7 +317,6 @@ def make_false_color(filepath, bandlist, filename):
 
     print(filename+' written successfully.')
     return
-
 
 def scaleto255(x):
     return(((x - np.nanmin(x))) * (255/(np.nanmax(x)-np.nanmin(x))))

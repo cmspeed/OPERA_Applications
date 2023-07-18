@@ -41,3 +41,4 @@ dependencies:
     - pystac-client==0.5.1
     - scikit-image
     - selenium
+    

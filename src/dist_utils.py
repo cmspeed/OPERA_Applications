@@ -1,34 +1,27 @@
 # Library Imports
+import os
 import math
 import xarray as xr
 import rasterio as rio
 from rasterio.merge import merge
 import rioxarray
-import hvplot.xarray
 from osgeo import gdal
-import geoviews as gv
-import pyproj
 import numpy as np
-import geopandas as gpd
-import holoviews as hv
+import numpy.ma as ma
 import folium
-import panel.widgets as pnw
 from shapely.geometry import shape, Point, Polygon
-import datetime
-from datetime import date, timedelta, datetime
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 from netrc import netrc
 from subprocess import Popen
 from getpass import getpass
-import os
-import tempfile
-from http import cookiejar
-from urllib import request
-from urllib.parse import urlencode
 
-
-# Functions
-# The below two functions check_netrc() and make_manager() could be streamlined into one function that does both.
 def check_netrc():
+
+    '''
+    Checks that user possesses necessary credentials for accessing Earthdata in .netrc file. If not present, user is prompted to 
+    enter username and password, which are placed in a .netrc file in user's home directory. 
+    '''
     # -----------------------------------AUTHENTICATION CONFIGURATION-------------------------------- #
     urs = 'urs.earthdata.nasa.gov'    # Earthdata URL to call for authentication
     prompts = ['Enter NASA Earthdata Login Username \n(or create an account at urs.earthdata.nasa.gov): ',
@@ -52,102 +45,34 @@ def check_netrc():
         homeDir = os.path.expanduser("~")
         Popen('echo machine {1} >> {0}.netrc'.format(homeDir + os.sep, urs), shell=True)
         Popen('echo login {} >> {}.netrc'.format(getpass(prompt=prompts[0]), homeDir + os.sep), shell=True)
-        Popen('echo password {} >> {}.netrc'.format(getpass(prompt=prompts[1]), homeDir + os.sep), shell=True)     
+        Popen('echo password {} >> {}.netrc'.format(getpass(prompt=prompts[1]), homeDir + os.sep), shell=True)
+    #return netrc(netrcDir).authenticators(urs)
+    return
 
-    return netrc(netrcDir).authenticators(urs)
-
-def make_manager(authenticators):
-    # Create a password manager to deal with the 401 response that is returned from Earthdata Login
-    password_manager = request.HTTPPasswordMgrWithDefaultRealm()
-    password_manager.add_password(None, "https://urs.earthdata.nasa.gov", authenticators[0], authenticators[2])
-
-    # Create a cookie jar for storing cookies. This is used to store and return
-    # the session cookie given to use by the data server (otherwise it will just
-    # keep sending us back to Earthdata Login to authenticate). Ideally, we
-    # should use a file based cookie jar to preserve cookies between runs. This
-    # will make it much more efficient.
-    cookie_jar = cookiejar.CookieJar()
-    # Install all the handlers.
-    opener = request.build_opener(
-       request.HTTPBasicAuthHandler(password_manager),
-       request.HTTPCookieProcessor(cookie_jar))
-    request.install_opener(opener)
-
-def stack_bands(bandpath:str, bandlist:list): 
+def clipPercentile(x):
     '''
-    Returns geocube with three bands stacked into one multi-dimensional array.
+    Returns an array containing the original values clipped to the 2nd and 98th percentile of the input data.
+    This provides more vivid visualizations of the data.
             Parameters:
-                    bandpath (str): Path to bands that should be stacked
-                    bandlist (list): Three bands that should be stacked
+                x (array): Numpy array containing the original data
             Returns:
-                    bandStack (xarray Dataset): Geocube with stacked bands
-                    crs (int): Coordinate Reference System corresponding to bands
-
-
-            Updates: Changed load data library from xarray to rioxarray due to deprecation of xarray.open_rasterio().
-            This required excluding the .scales method as well, which may cause problems, but I will wait and see.
+                x_clipped (array): Numpy array containing the data clipped to values between the 2nd and 98th percentile of the input array.
     '''
-    bandStack = []; bandS = []; bandStack_ = [];
-    for i,band in enumerate(bandlist):
-        if i==0:
-            #bandStack_ = xr.open_rasterio(bandpath%band)
-            bandStack_ = rioxarray.open_rasterio(bandpath%band)
-            #crs = pyproj.CRS.to_epsg(pyproj.CRS.from_proj4(bandStack_.crs))
-            crs = bandStack_.rio.crs.to_epsg()
-            #bandStack_ = bandStack_ * bandStack_.scales[0]
-            bandStack = bandStack_.squeeze(drop=True)
-            bandStack = bandStack.to_dataset(name='z')
-            bandStack.coords['band'] = i+1
-            bandStack = bandStack.rename({'x':'longitude', 'y':'latitude', 'band':'band'})
-            bandStack = bandStack.expand_dims(dim='band')  
-        else:
-            #bandS = xr.open_rasterio(bandpath%band)
-            bandS = rioxarray.open_rasterio(bandpath%band)
-            #bandS = bandS * bandS.scales[0]
-            bandS = bandS.squeeze(drop=True)
-            bandS = bandS.to_dataset(name='z')
-            bandS.coords['band'] = i+1
-            bandS = bandS.rename({'x':'longitude', 'y':'latitude', 'band':'band'})
-            bandS = bandS.expand_dims(dim='band')
-            bandStack = xr.concat([bandStack, bandS], dim='band')
-    return bandStack, crs
+    x_clipped = np.clip(x, np.nanpercentile(x, 2), np.nanpercentile(x,98))
+    return(x_clipped)
 
-def time_and_area_cube(dist_status, dist_date, veg_anom_max, anom_threshold, pixel_area, bounds, starting_day, ending_day, ref_date, step=3):
+def colorize(array, cmap='hot_r'):
     '''
-    Returns geocube with time and area dimensions.
+    Converts pixels to RGB, adjusting colorscale relative to data range.
             Parameters:
-                    dist_status (xarray DataArray): Disturbance Status band
-                    anom_max (xarray DataArray): Maximum Anomaly band
-                    dist_date (xarray DataArray): Disturbance Date band
-                    anom_threshold (int): Filter out pixels less than the value
-                    pixel_area (float): Area of one pixel (m)
-                    bounds (list): Boundary of the area of interest (pixel value)
-                    starting_day (int): First observation date
-                    ending_day (int): Last observation date
-                    ref_date (datetime): Date of the beginning of the record
-                    step (int): Increment between each day in time series
-
+                    array (numpy array): Array of pixels to assign RGB values
+                    cmap (colormap): Colormap to assign to pixels
             Returns:
-                    wildfire_extent (xarray Dataset): Geocube with time and area dimensions
+                Pixels with RGB values corresponding to the specified cmap.
     '''
-    lats = np.array(dist_status.latitude)
-    lons = np.array(dist_status.longitude)
-    expanded_array1 = []
-    expanded_array2 = []
-    respective_areas = {}
-
-    for i in range(starting_day, ending_day, step):
-        vg = dist_status.where((veg_anom_max > anom_threshold) & (dist_date > starting_day) & (dist_date <= i))
-        extent_area = compute_area(vg.data,bounds,pixel_area, ref_date)
-        date = standard_date(str(i), ref_date)
-        coords =  {'lat': lats, 'lon': lons, 'time': date, 'area':extent_area}
-        time_and_area = xr.DataArray(vg.data, coords=coords, dims=['lat', 'lon'])
-        expanded_time_and_area = xr.concat([time_and_area], 'time')
-        expanded_time_and_area = expanded_time_and_area.to_dataset(name='z')
-        expanded_array2.append(expanded_time_and_area)
-    area_extent = xr.concat(expanded_array2[:], dim='time')
-    return area_extent
-
+    normed_data = (array - array.min()) / (array.max() - array.min())    
+    cm = plt.cm.get_cmap(cmap)
+    return cm(normed_data) 
 
 def compute_area(data_,bounds, pixel_area, ref_date):
     '''
@@ -165,22 +90,10 @@ def compute_area(data_,bounds, pixel_area, ref_date):
     fire_area = str(math.trunc(fire_area)) + " kilometers squared"
     return fire_area
 
-def standard_date(day, ref_date):
-    '''
-    Returns the inputted day number as a standard date.
-            Parameters:
-                    day (str): Day number that should be converted
-                    ref_date (datetime): Date of the beginning of the record
-            Returns:
-                    res (str): Standard date corresponding to inputted day
-    '''
-    day.rjust(3 + len(day), '0')
-    res_date = ref_date + timedelta(days=int(day))
-    res = res_date.strftime("%m-%d-%Y")
-    return res
-
 def getbasemaps():
-    # Add custom base maps to folium
+    '''
+    Add custom base maps to folium.
+    '''
     basemaps = {
         'Google Maps': folium.TileLayer(
             tiles = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
@@ -230,41 +143,39 @@ def getbasemaps():
     return basemaps
 
 def handle_draw(target, action, geo_json):
-
+    '''
+    Neccessary for returning user-defined AOI in interactive map
+    '''
     return
 
-def merge_rasters(input_files, output_file):
-    """
-    Function to take a list of raster tiles, mosaic them using rasterio, and output the file.
-    :param input_files: list of input raster files 
-    """
+def intersection_percent(item, aoi):
+    '''
+   Returns percentage that Item's geometry intersects the AOI.
+            Parameters:
+                    item (Iem): DIST tile
+                    aoi (dict): Area of interest
+            Returns:
+                    intersection_percent (float): Percentage that Item's geometry intersects 
+                                                    the AOI (An item that completely covers
+                                                    the AOI has a value of 100)
+    '''
+    geom_item = shape(item.geometry)
+    geom_aoi = shape(aoi)
+    intersected_geom = geom_aoi.intersection(geom_item)
+    intersection_percent = (intersected_geom.area * 100) / geom_aoi.area
 
-    # Open the input rasters and retrieve metadata
-    src_files = [rio.open(file) for file in input_files]
-    meta = src_files[0].meta
-    
-    #mosaic the src_files
-    mosaic, out_trans = merge(src_files)
-
-    # Update the metadata
-    out_meta = meta.copy()
-    out_meta.update({"driver": "GTiff", 
-                    "height": mosaic.shape[1],
-                    "width": mosaic.shape[2], 
-                    "transform": out_trans
-                    }
-                    )
-
-    with rio.open(output_file, 'w', **out_meta) as dst:
-        dst.write(mosaic)
-
-    #Close the input rasters
-    for src in src_files:
-        src.close()
-    
-    return mosaic
+    return intersection_percent
 
 def make_hls_true_color(filepath, bandlist, filename):
+    '''
+    Return a rendered true color of an input HLS tile.
+            Parameters:
+                filepath (url): Path to the location of the HLS tile.
+                bandlist (list): List of bands to produce the true color (bandlist may contain bands not required for true color).
+                filename (str): Output filename.
+            Returns:
+                No returns. Saves .tif file locally.
+    '''
     
     print('making hls true color rendering...')
 
@@ -318,9 +229,16 @@ def make_hls_true_color(filepath, bandlist, filename):
     print(filename+' written successfully.')
     return              
 
-
 def make_hls_false_color(filepath, bandlist, filename):
-    
+    '''
+    Return a rendered false color of an input HLS tile.
+            Parameters:
+                filepath (url): Path to the location of the HLS tile.
+                bandlist (list): List of bands to produce the false color (bandlist may contain bands not required for false color).
+                filename (str): Output filename.
+            Returns:
+                No returns. Saves .tif file locally.
+    '''
     print('making false color rendering...')
 
     for i,b in enumerate(bandlist):
@@ -374,6 +292,15 @@ def make_hls_false_color(filepath, bandlist, filename):
     return
 
 def make_hls_ndvi(filepath, bandlist, filename):
+    '''
+    Return a rendered ndvi of an input HLS tile.
+            Parameters:
+                filepath (url): Path to the location of the HLS tile.
+                bandlist (list): List of bands to produce the NDVI (bandlist may contain bands not required for NDVI).
+                filename (str): Output filename.
+            Returns:
+                No returns. Saves .tif file locally.
+    '''
     
     print('making ndvi rendering...')
 
@@ -435,8 +362,175 @@ def make_hls_ndvi(filepath, bandlist, filename):
     
     return
 
-def scaleto255(x):
-    return(((x - np.nanmin(x))) * (255/(np.nanmax(x)-np.nanmin(x))))
+def mask_rasters(merged_VEG_ANOM_MAX, merged_VEG_DIST_DATE, merged_VEG_DIST_STATUS):
+    '''
+    Return VEG-ANOM-MAX, VEG-DIST-DATE, VEG-DIST-STATUS rasters with nan values masked.
+            Parameters:
+                    merged_VEG_ANOM_MAX (array): Merged VEG-ANOM-MAX arrays
+                    merged_VEG_DIST_DATE (array): Merged VEG-DIST-DATE arrays
+                    merged_VEG_DIST_STATUS (array): Merged VEG-DIST-STATUS arrays
+            Returns:
+                    masked_VEG_ANOM_MAX (array): merged_VEG_ANOM_MAX array with nan values masked
+                    masked_VEG_DIST_DATE (array): merged_VEG_DIST_DATE array with nan values masked
+                    masked_VEG_DIST_STATUS (array): merged_VEG_DIST_STATUS array with nan values masked
+    '''
+    raster_da_VEG_ANOM_MAX = merged_VEG_ANOM_MAX.where((merged_VEG_ANOM_MAX<=100), np.nan)
+    arr_raster_da_VEG_ANOM_MAX = raster_da_VEG_ANOM_MAX.values
+    masked_VEG_ANOM_MAX = ma.masked_invalid(arr_raster_da_VEG_ANOM_MAX)
+    
+    raster_da_VEG_DIST_DATE = merged_VEG_DIST_DATE.where((merged_VEG_DIST_DATE>0), np.nan)
+    arr_raster_da_VEG_DIST_DATE = raster_da_VEG_DIST_DATE.values
+    masked_VEG_DIST_DATE = ma.masked_invalid(arr_raster_da_VEG_DIST_DATE)
+    
+    raster_da_VEG_DIST_STATUS = merged_VEG_DIST_STATUS.where((merged_VEG_DIST_STATUS>0) & (merged_VEG_DIST_STATUS<255), np.nan)
+    arr_raster_da_VEG_DIST_STATUS = raster_da_VEG_DIST_STATUS.values
+    masked_VEG_DIST_STATUS = ma.masked_invalid(arr_raster_da_VEG_DIST_STATUS)
+    
+    return masked_VEG_ANOM_MAX, masked_VEG_DIST_DATE, masked_VEG_DIST_STATUS
 
-def clipPercentile(x):
-    return(np.clip(x, np.nanpercentile(x, 2), np.nanpercentile(x,98)))
+def merge_rasters(input_files, output_file):
+    """
+    Function to take a list of raster tiles, mosaic them using rasterio, and output the file.
+    :param input_files: list of input raster files 
+    """
+
+    # Open the input rasters and retrieve metadata
+    src_files = [rio.open(file) for file in input_files]
+    meta = src_files[0].meta
+    
+    #mosaic the src_files
+    mosaic, out_trans = merge(src_files)
+
+    # Update the metadata
+    out_meta = meta.copy()
+    out_meta.update({"driver": "GTiff", 
+                    "height": mosaic.shape[1],
+                    "width": mosaic.shape[2], 
+                    "transform": out_trans
+                    }
+                    )
+
+    with rio.open(output_file, 'w', **out_meta) as dst:
+        dst.write(mosaic)
+
+    #Close the input rasters
+    for src in src_files:
+        src.close()
+    
+    return mosaic
+
+def scaleto255(x):
+    '''
+    Returns an array containing values between 0-255 that correspond to the original input array. 
+    This array is essentially a rendered version of the input data scaled to 8-bit integer format.
+            Parameters:
+                x (array): Numpy array containing the original data
+            Returns:
+                x_scaled (array): Numpy array containing the data scaled to values between 0-255
+    '''
+    x_scaled = ((x - np.nanmin(x))) * (255/(np.nanmax(x)-np.nanmin(x)))
+    return(x_scaled)
+
+def stack_bands(bandpath:str, bandlist:list): 
+    '''
+    Returns geocube with three bands stacked into one multi-dimensional array.
+            Parameters:
+                    bandpath (str): Path to bands that should be stacked
+                    bandlist (list): Three bands that should be stacked
+            Returns:
+                    bandStack (xarray Dataset): Geocube with stacked bands
+                    crs (int): Coordinate Reference System corresponding to bands
+
+
+            Updates: Changed load data library from xarray to rioxarray due to deprecation of xarray.open_rasterio().
+            This required excluding the .scales method as well, which may cause problems, but I will wait and see.
+    '''
+    bandStack = []; bandS = []; bandStack_ = [];
+    for i,band in enumerate(bandlist):
+        if i==0:
+            #bandStack_ = xr.open_rasterio(bandpath%band)
+            bandStack_ = rioxarray.open_rasterio(bandpath%band)
+            #crs = pyproj.CRS.to_epsg(pyproj.CRS.from_proj4(bandStack_.crs))
+            crs = bandStack_.rio.crs.to_epsg()
+            #bandStack_ = bandStack_ * bandStack_.scales[0]
+            bandStack = bandStack_.squeeze(drop=True)
+            bandStack = bandStack.to_dataset(name='z')
+            bandStack.coords['band'] = i+1
+            bandStack = bandStack.rename({'x':'longitude', 'y':'latitude', 'band':'band'})
+            bandStack = bandStack.expand_dims(dim='band')  
+        else:
+            #bandS = xr.open_rasterio(bandpath%band)
+            bandS = rioxarray.open_rasterio(bandpath%band)
+            #bandS = bandS * bandS.scales[0]
+            bandS = bandS.squeeze(drop=True)
+            bandS = bandS.to_dataset(name='z')
+            bandS.coords['band'] = i+1
+            bandS = bandS.rename({'x':'longitude', 'y':'latitude', 'band':'band'})
+            bandS = bandS.expand_dims(dim='band')
+            bandStack = xr.concat([bandStack, bandS], dim='band')
+    return bandStack, crs
+
+def standard_date(day, ref_date):
+    '''
+    Returns the inputted day number as a standard date.
+            Parameters:
+                    day (str): Day number that should be converted
+                    ref_date (datetime): Date of the beginning of the record
+            Returns:
+                    res (str): Standard date corresponding to inputted day
+    '''
+    day.rjust(3 + len(day), '0')
+    res_date = ref_date + timedelta(days=int(day))
+    res = res_date.strftime("%m-%d-%Y")
+    return res
+
+def time_and_area_cube(dist_status, dist_date, veg_anom_max, anom_threshold, pixel_area, bounds, starting_day, ending_day, ref_date, step=3):
+    '''
+    Returns geocube with time and area dimensions.
+            Parameters:
+                    dist_status (xarray DataArray): Disturbance Status band
+                    anom_max (xarray DataArray): Maximum Anomaly band
+                    dist_date (xarray DataArray): Disturbance Date band
+                    anom_threshold (int): Filter out pixels less than the value
+                    pixel_area (float): Area of one pixel (m)
+                    bounds (list): Boundary of the area of interest (pixel value)
+                    starting_day (int): First observation date
+                    ending_day (int): Last observation date
+                    ref_date (datetime): Date of the beginning of the record
+                    step (int): Increment between each day in time series
+
+            Returns:
+                    wildfire_extent (xarray Dataset): Geocube with time and area dimensions
+    '''
+    lats = np.array(dist_status.latitude)
+    lons = np.array(dist_status.longitude)
+    expanded_array1 = []
+    expanded_array2 = []
+    respective_areas = {}
+
+    for i in range(starting_day, ending_day, step):
+        vg = dist_status.where((veg_anom_max > anom_threshold) & (dist_date > starting_day) & (dist_date <= i))
+        extent_area = compute_area(vg.data,bounds,pixel_area, ref_date)
+        date = standard_date(str(i), ref_date)
+        coords =  {'lat': lats, 'lon': lons, 'time': date, 'area':extent_area}
+        time_and_area = xr.DataArray(vg.data, coords=coords, dims=['lat', 'lon'])
+        expanded_time_and_area = xr.concat([time_and_area], 'time')
+        expanded_time_and_area = expanded_time_and_area.to_dataset(name='z')
+        expanded_array2.append(expanded_time_and_area)
+    area_extent = xr.concat(expanded_array2[:], dim='time')
+    return area_extent
+
+def transform_data_for_folium(url=[]):
+    '''
+    Returns data that is tranformed to be read correctly by Folium.
+            Parameters:
+                url (web url): Url to data location
+            Returns:
+                reproj (array): Array that is reprojected to EPSG 4326
+                colormap (cmap): Colormap of choice
+    '''
+    src = rioxarray.open_rasterio(url)
+    reproj = src.rio.reproject("EPSG:4326")             # Folium maps are in EPSG:4326
+    colormap = mpl.colormaps["hot_r"]
+    
+    return reproj, colormap

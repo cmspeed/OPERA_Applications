@@ -264,7 +264,7 @@ def merge_rasters(input_files, output_file):
     
     return mosaic
 
-def make_hls_truecolor(filepath, bandlist, filename):
+def make_hls_true_color(filepath, bandlist, filename):
     
     print('making hls true color rendering...')
 
@@ -333,7 +333,7 @@ def make_hls_false_color(filepath, bandlist, filename):
                 crs = src.crs
                 
         #load bands  
-        if b == "B05" or b =="B8A":
+        if b == "B05" or b =="B08":
             data = gdal.Open(band)
             nir = data.GetRasterBand(1).ReadAsArray()
         if b == "B03":
@@ -387,7 +387,7 @@ def make_hls_ndvi(filepath, bandlist, filename):
                     transform = src.transform
                     crs = src.crs  
             #load bands  
-            if b == "B05" or b == "B8A":
+            if b == "B05" or b == "B08":
                 data = gdal.Open(band)
                 nir = data.GetRasterBand(1).ReadAsArray()
             elif b == "B04":

@@ -115,6 +115,9 @@ def compute_area(data_,bounds, pixel_area, ref_date):
     fire_area = str(math.trunc(fire_area)) + " kilometers squared"
     return fire_area
 
+### This function would manually compute the number of pixels of each class inside of AOI.
+### Challenging because numpy array doesnt have spatial ref. 
+### Solution seems to be to use leafmap/rasterstats packages for computing the zonal stats.
 #def compute_area2(data, bounds, pixel_area):
     # data = data[bounds[0]:bounds[1], bounds[2]:bounds[3]]
     # classes = [2,5,4,6] #DIST-ANN VEG-DIST-STATUS classes
@@ -131,6 +134,9 @@ def compute_area(data_,bounds, pixel_area, ref_date):
     # })
 
 def compute_areas(stats, pixel_area):
+
+    '''
+    '''
     classes = []
     description = ['No Disturbance', 'Confirmed < 50%, Ongoing',
                    'Confirmed ≥ 50%, Ongoing', 'Confirmed < 50%, complete', 'Confirmed ≥ 50%, Complete','']
@@ -150,7 +156,6 @@ def compute_areas(stats, pixel_area):
          'Area (hectares)': areas_hectares
         },
     )
-
     return(affected_areas)
 
 def getbasemaps():
@@ -229,62 +234,6 @@ def intersection_percent(item, aoi):
 
     return intersection_percent
 
-# def make_veg_dist_status_visual(filepath, filename):
-#     '''
-#     Return a rendered visual of a VEG-DIST-STATUS tile.
-#             Parameters:
-#                 filepath (url): Path to the location of the VEG-DIST-STATUS tile.
-#                 filename (str): Output filename.
-#             Returns:
-#                 No returns. Saves .tif file locally.
-#     '''
-#     print('making VEG-DIST-STATUS rendering...')
-
-#     with rio.open(filepath, mode='r') as src:
-#         transform = src.transform
-#         crs = src.crs
-#         meta = src.meta
-
-#     data = gdal.Open(filepath)
-#     array = data.GetRasterBand(1).ReadAsArray()
-#     array_nodata  = np.where(array!=255, array, 0)
-#     data = None
-
-#     # Define the mapping of values to hex color codes
-
-#     # color_mapping = {
-#     #     2: "#ffffb2",
-#     #     5: "#f45629",
-#     #     4: "#feb751",
-#     #     6: "#bd0026",
-#     # }
-
-#     scaled = scaleto255(array_nodata)
-#     expanded_array = np.expand_dims(scaled, axis=0)
-#     #colorized_veg_dist_status = colorize(array, cmap = 'hot_r')
-#     #colorized_veg_dist_status_reshaped = colorized_veg_dist_status.transpose(2, 0, 1)
-
-#     VEG_DIST_STATUS_dataset = rio.open(
-#         str(filename),
-#         'w',
-#         driver='GTiff',
-#         height=3660,
-#         width=3660,
-#         count=1,
-#         dtype=expanded_array.dtype,
-#         crs=crs,
-#         transform=transform,
-#         nodata=0
-#     )
-
-#     VEG_DIST_STATUS_dataset.write(expanded_array)
-#     VEG_DIST_STATUS_dataset.close() 
-
-#     print(filename+' written successfully.')
-
-#     return
-
-
 def make_veg_dist_status_visual(filepath, filename):
     '''
     Return a rendered visual of a VEG-DIST-STATUS tile.
@@ -351,7 +300,6 @@ def make_veg_dist_status_visual(filepath, filename):
 
     return
 
-
 def make_hls_true_color(filepath, bandlist, filename):
     '''
     Return a rendered true color of an input HLS tile.
@@ -362,8 +310,10 @@ def make_hls_true_color(filepath, bandlist, filename):
             Returns:
                 No returns. Saves .tif file locally.
     '''
-    
+
     print('making hls true color rendering...')
+
+    #test first to see if there is only one or multiple files. If multiple perform a merge of the files
 
     for i,b in enumerate(bandlist):
         band = filepath+b+'.tif'
@@ -573,6 +523,24 @@ def mask_rasters(merged_VEG_ANOM_MAX, merged_VEG_DIST_DATE, merged_VEG_DIST_STAT
     masked_VEG_DIST_STATUS = ma.masked_invalid(arr_raster_da_VEG_DIST_STATUS)
     
     return masked_VEG_ANOM_MAX, masked_VEG_DIST_DATE, masked_VEG_DIST_STATUS
+
+def merge_multiband_rasters(filepaths, bandlist, filename):
+    
+    #make a rasterio object in memory that is a multiband raster
+    vrts = []
+    for file in filepaths:
+        bands = []
+        for band in bandlist:
+            bands.append(file+band+'.tif')
+        
+        #make gdalVRT
+        vrts.append(gdal.BuildVRT('', bands, separate=True))
+
+    merged_vrt = gdal.BuildVRT('', vrts, separate=False)
+    
+    gdal.Translate(filename, merged_vrt, format='GTiff')
+    
+    return merged_vrt
 
 def merge_rasters(input_files, output_file):
     """

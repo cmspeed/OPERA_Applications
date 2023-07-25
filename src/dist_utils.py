@@ -1,6 +1,7 @@
 # Library Imports
 import os
 import math
+from datetime import datetime, timedelta
 import xarray as xr
 import rasterio as rio
 from rasterio.merge import merge
@@ -15,9 +16,11 @@ import matplotlib.pyplot as plt
 from netrc import netrc
 from subprocess import Popen
 from getpass import getpass
+from http import cookiejar
+from urllib import request
+import tempfile
 
 def check_netrc():
-
     '''
     Checks that user possesses necessary credentials for accessing Earthdata in .netrc file. If not present, user is prompted to 
     enter username and password, which are placed in a .netrc file in user's home directory. 
@@ -47,7 +50,28 @@ def check_netrc():
         Popen('echo login {} >> {}.netrc'.format(getpass(prompt=prompts[0]), homeDir + os.sep), shell=True)
         Popen('echo password {} >> {}.netrc'.format(getpass(prompt=prompts[1]), homeDir + os.sep), shell=True)
     #return netrc(netrcDir).authenticators(urs)
-    return
+    return 
+
+# def make_manager(authenticators):
+#     '''
+#     # Create a password manager to deal with the 401 response that is returned from Earthdata Login
+#             Parameters:
+#                     authenticators (list): [Earthdata username, Earthdata password]
+#     '''
+#     password_manager = request.HTTPPasswordMgrWithDefaultRealm()
+#     password_manager.add_password(None, "https://urs.earthdata.nasa.gov", authenticators[0], authenticators[2])
+
+#     # Create a cookie jar for storing cookies. This is used to store and return
+#     # the session cookie given to use by the data server (otherwise it will just
+#     # keep sending us back to Earthdata Login to authenticate). Ideally, we
+#     # should use a file based cookie jar to preserve cookies between runs. This
+#     # will make it much more efficient.
+#     cookie_jar = cookiejar.CookieJar()
+#     # Install all the handlers.
+#     opener = request.build_opener(
+#        request.HTTPBasicAuthHandler(password_manager),
+#        request.HTTPCookieProcessor(cookie_jar))
+#     request.install_opener(opener)
 
 def clipPercentile(x):
     '''
@@ -70,7 +94,7 @@ def colorize(array, cmap='hot_r'):
             Returns:
                 Pixels with RGB values corresponding to the specified cmap.
     '''
-    normed_data = (array - array.min()) / (array.max() - array.min())    
+    normed_data = (array - array.min()) / (array.max() - array.min()) 
     cm = plt.cm.get_cmap(cmap)
     return cm(normed_data) 
 
@@ -165,6 +189,129 @@ def intersection_percent(item, aoi):
     intersection_percent = (intersected_geom.area * 100) / geom_aoi.area
 
     return intersection_percent
+
+# def make_veg_dist_status_visual(filepath, filename):
+#     '''
+#     Return a rendered visual of a VEG-DIST-STATUS tile.
+#             Parameters:
+#                 filepath (url): Path to the location of the VEG-DIST-STATUS tile.
+#                 filename (str): Output filename.
+#             Returns:
+#                 No returns. Saves .tif file locally.
+#     '''
+#     print('making VEG-DIST-STATUS rendering...')
+
+#     with rio.open(filepath, mode='r') as src:
+#         transform = src.transform
+#         crs = src.crs
+#         meta = src.meta
+
+#     data = gdal.Open(filepath)
+#     array = data.GetRasterBand(1).ReadAsArray()
+#     array_nodata  = np.where(array!=255, array, 0)
+#     data = None
+
+#     # Define the mapping of values to hex color codes
+
+#     # color_mapping = {
+#     #     2: "#ffffb2",
+#     #     5: "#f45629",
+#     #     4: "#feb751",
+#     #     6: "#bd0026",
+#     # }
+
+#     scaled = scaleto255(array_nodata)
+#     expanded_array = np.expand_dims(scaled, axis=0)
+#     #colorized_veg_dist_status = colorize(array, cmap = 'hot_r')
+#     #colorized_veg_dist_status_reshaped = colorized_veg_dist_status.transpose(2, 0, 1)
+
+#     VEG_DIST_STATUS_dataset = rio.open(
+#         str(filename),
+#         'w',
+#         driver='GTiff',
+#         height=3660,
+#         width=3660,
+#         count=1,
+#         dtype=expanded_array.dtype,
+#         crs=crs,
+#         transform=transform,
+#         nodata=0
+#     )
+
+#     VEG_DIST_STATUS_dataset.write(expanded_array)
+#     VEG_DIST_STATUS_dataset.close() 
+
+#     print(filename+' written successfully.')
+
+#     return
+
+
+def make_veg_dist_status_visual(filepath, filename):
+    '''
+    Return a rendered visual of a VEG-DIST-STATUS tile.
+            Parameters:
+                filepath (url): Path to the location of the VEG-DIST-STATUS tile.
+                filename (str): Output filename.
+            Returns:
+                No returns. Saves .tif file locally.
+    '''
+    print('making VEG-DIST-STATUS rendering...')
+
+    with rio.open(filepath, mode='r') as src:
+        transform = src.transform
+        crs = src.crs
+        meta = src.meta
+
+    data = gdal.Open(filepath)
+    array = data.GetRasterBand(1).ReadAsArray()
+    data = None
+
+    # Define the mapping of values to hex color codes
+
+    # color_mapping = {
+    #     2: "#ffffb2",
+    #     5: "#f45629",
+    #     4: "#feb751",
+    #     6: "#bd0026",
+    # }
+
+    color_mapping = {
+        2: (255, 255, 178, 1),
+        5: (244, 86, 41, 1),
+        4: (254, 183, 81, 1),
+        6: (189, 0, 38, 1),
+        255: (0, 0, 0, 0),
+        0: (255, 255, 255, 0)
+    }
+
+    with rio.open(filename, 'w', **meta) as dst:
+        dst.write(array, indexes=1)
+        dst.write_colormap(1, color_mapping)
+        nodata=0
+        #dst.write_mask(array)
+        #cmap = dst.colormap(1)
+
+
+    # VEG_DIST_STATUS_dataset = rio.open(
+    #     str(filename),
+    #     'w',
+    #     driver='GTiff',
+    #     height=3660,
+    #     width=3660,
+    #     count=1,
+    #     dtype=expanded_array.dtype,
+    #     crs=crs,
+    #     transform=transform,
+    #     nodata=0
+    # )
+
+    # VEG_DIST_STATUS_dataset.write(expanded_array)
+    # VEG_DIST_STATUS_dataset.close() 
+
+    print(filename+' written successfully.')
+
+    return
+
 
 def make_hls_true_color(filepath, bandlist, filename):
     '''

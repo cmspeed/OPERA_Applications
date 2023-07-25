@@ -2,6 +2,7 @@
 import os
 import math
 from datetime import datetime, timedelta
+import pandas as pd
 import xarray as xr
 import rasterio as rio
 from rasterio.merge import merge
@@ -113,6 +114,44 @@ def compute_area(data_,bounds, pixel_area, ref_date):
     fire_area = fire_pixel_count * pixel_area * pow(10, -6)
     fire_area = str(math.trunc(fire_area)) + " kilometers squared"
     return fire_area
+
+#def compute_area2(data, bounds, pixel_area):
+    # data = data[bounds[0]:bounds[1], bounds[2]:bounds[3]]
+    # classes = [2,5,4,6] #DIST-ANN VEG-DIST-STATUS classes
+
+    # ### compute for each class
+    # areas = []
+    # for c in classes:
+    #     pixel_count = len(data[np.where(data==c)])
+    #     areas.append(pixel_count * pixel_area * pow(10, -6))
+
+    # affected_areas = pd.DataFrame(
+    # {'VEG-DIST-STATUS': classes,
+    #  'Area (km2)': areas,
+    # })
+
+def compute_areas(stats, pixel_area):
+    classes = []
+    description = ['No Disturbance', 'Confirmed < 50%, Ongoing',
+                   'Confirmed ≥ 50%, Ongoing', 'Confirmed < 50%, complete', 'Confirmed ≥ 50%, Complete','']
+    
+    areas_km = []
+    areas_hectares = []
+    
+    for i in stats[0]:
+        classes.append(i)
+        areas_km.append(stats[0][i] * pixel_area * pow(10, -6))
+        areas_hectares.append((stats[0][i] * pixel_area * pow(10, -6))*100)
+
+    affected_areas = pd.DataFrame(
+        {'VEG-DIST-STATUS Class': classes,
+         'Description': description,
+         'Area (km2)': areas_km,
+         'Area (hectares)': areas_hectares
+        },
+    )
+
+    return(affected_areas)
 
 def getbasemaps():
     '''

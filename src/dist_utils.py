@@ -1,5 +1,6 @@
 # Library Imports
 import os
+import re
 import math
 from datetime import datetime, timedelta
 import pandas as pd
@@ -15,6 +16,7 @@ from shapely.geometry import shape, Point, Polygon
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from netrc import netrc
+from pyproj import Transformer
 from subprocess import Popen
 from getpass import getpass
 from http import cookiejar
@@ -52,27 +54,6 @@ def check_netrc():
         Popen('echo password {} >> {}.netrc'.format(getpass(prompt=prompts[1]), homeDir + os.sep), shell=True)
     #return netrc(netrcDir).authenticators(urs)
     return 
-
-# def make_manager(authenticators):
-#     '''
-#     # Create a password manager to deal with the 401 response that is returned from Earthdata Login
-#             Parameters:
-#                     authenticators (list): [Earthdata username, Earthdata password]
-#     '''
-#     password_manager = request.HTTPPasswordMgrWithDefaultRealm()
-#     password_manager.add_password(None, "https://urs.earthdata.nasa.gov", authenticators[0], authenticators[2])
-
-#     # Create a cookie jar for storing cookies. This is used to store and return
-#     # the session cookie given to use by the data server (otherwise it will just
-#     # keep sending us back to Earthdata Login to authenticate). Ideally, we
-#     # should use a file based cookie jar to preserve cookies between runs. This
-#     # will make it much more efficient.
-#     cookie_jar = cookiejar.CookieJar()
-#     # Install all the handlers.
-#     opener = request.build_opener(
-#        request.HTTPBasicAuthHandler(password_manager),
-#        request.HTTPCookieProcessor(cookie_jar))
-#     request.install_opener(opener)
 
 def clipPercentile(x):
     '''
@@ -115,42 +96,37 @@ def compute_area(data_,bounds, pixel_area, ref_date):
     fire_area = str(math.trunc(fire_area)) + " kilometers squared"
     return fire_area
 
-### This function would manually compute the number of pixels of each class inside of AOI.
-### Challenging because numpy array doesnt have spatial ref. 
-### Solution seems to be to use leafmap/rasterstats packages for computing the zonal stats.
-#def compute_area2(data, bounds, pixel_area):
-    # data = data[bounds[0]:bounds[1], bounds[2]:bounds[3]]
-    # classes = [2,5,4,6] #DIST-ANN VEG-DIST-STATUS classes
-
-    # ### compute for each class
-    # areas = []
-    # for c in classes:
-    #     pixel_count = len(data[np.where(data==c)])
-    #     areas.append(pixel_count * pixel_area * pow(10, -6))
-
-    # affected_areas = pd.DataFrame(
-    # {'VEG-DIST-STATUS': classes,
-    #  'Area (km2)': areas,
-    # })
-
-def compute_areas(stats, pixel_area):
+def compute_areas(stats, pixel_area, product='alert', date=None):
 
     '''
+
     '''
+    dates = []
     classes = []
-    description = ['No Disturbance', 'Confirmed < 50%, Ongoing',
-                   'Confirmed ≥ 50%, Ongoing', 'Confirmed < 50%, complete', 'Confirmed ≥ 50%, Complete','']
+
+    if product == 'alert':
+        description = ['No disturbance', 'Provisional < 50%', 'Confirmed < 50%', 'Provisional  ≥ 50%', 'Confirmed  ≥ 50%']
+    elif product == 'ann':
+        description = ['No Disturbance', 'Confirmed < 50%, Ongoing',
+                       'Confirmed ≥ 50%, Ongoing', 'Confirmed < 50%, complete', 'Confirmed ≥ 50%, Complete']
+    elif product not in ['alert', 'ann']:
+        raise Exception("Invalid value for 'product'. It should be 'alert' or 'ann'.")
     
     areas_km = []
     areas_hectares = []
     
     for i in stats[0]:
+        if date is not None:
+            dates.append(date)
+        else:
+            dates.append(0)
         classes.append(i)
         areas_km.append(stats[0][i] * pixel_area * pow(10, -6))
         areas_hectares.append((stats[0][i] * pixel_area * pow(10, -6))*100)
 
     affected_areas = pd.DataFrame(
-        {'VEG-DIST-STATUS Class': classes,
+        {'Date': dates,
+         'VEG-DIST-STATUS Class': classes,
          'Description': description,
          'Area (km2)': areas_km,
          'Area (hectares)': areas_hectares
@@ -158,6 +134,23 @@ def compute_areas(stats, pixel_area):
     )
     return(affected_areas)
 
+def extract_date_from_string(input_string):
+    '''
+    This function is probably not universal for all DIST-ALERT data. 
+    It should work for the data stored on GLAD in the SEP folder.
+    '''
+    # Define a regex pattern to match the date in the format 'yyyymmdd' or 'yyyddd'
+    date_pattern = r'(\d{4}(?:\d{2}\d{2}|\d{3}))'
+
+    # Search for the pattern in the input URL
+    match = re.search(date_pattern, input_string)
+
+    # If a match is found, extract and return the date
+    if match:
+        return match.group(1)
+    else:
+        return None
+    
 def getbasemaps():
     '''
     Add custom base maps to folium.
@@ -210,11 +203,47 @@ def getbasemaps():
 
     return basemaps
 
+def get_pixel_value_at_coordinate(filepath, coords):
+    '''
+    Get pixel value for an input geotiff and coordinate location.
+            Parameters:
+                    filepath (url): Path to the location of the geotiff
+                    coords (list): Coordinate lat,lon
+            Returns:
+                Single pixel value (for a single banded raster)
+    '''
+    # Create a coordinate transformer
+    EPSG_WGS84 = 4326
+    EPSG_UTMZ10 = 32610
+    transformer = Transformer.from_crs(EPSG_WGS84, EPSG_UTMZ10, always_xy=True)
+
+    # Convert the input latitude and longitude to EPSG 3857
+    x, y = transformer.transform(coords[1], coords[0])
+
+    # Open the GeoTIFF file
+    with rio.open(filepath) as dataset:
+
+        # Get the row and column indices corresponding to the transformed coordinates
+        row, col = dataset.index(x, y)
+        
+        # Read the pixel value at the computed row and column indices
+        pixel_value = dataset.read(1, window=((row, row + 1), (col, col + 1)))
+
+    return pixel_value[0][0]
+
 def handle_draw(target, action, geo_json):
     '''
     Neccessary for returning user-defined AOI in interactive map
     '''
     return
+
+# Event handler for the on_interaction event
+# def handle_interaction(marker,**kwargs):
+#     if kwargs.get('type') == 'click':
+#         lat, lon = kwargs.get('coordinates')
+#         marker.location = (lat, lon)
+#         print('The location you specified correponds to the lat/lon', lat, lon)
+#     return 
 
 def intersection_percent(item, aoi):
     '''
@@ -245,6 +274,10 @@ def make_veg_dist_status_visual(filepath, filename):
     '''
     print('making VEG-DIST-STATUS rendering...')
 
+    # make output subdirectory, if not already present
+    out_dir = 'tifs/'
+    os.makedirs(os.path.dirname(out_dir), exist_ok=True)
+
     with rio.open(filepath, mode='r') as src:
         transform = src.transform
         crs = src.crs
@@ -254,15 +287,7 @@ def make_veg_dist_status_visual(filepath, filename):
     array = data.GetRasterBand(1).ReadAsArray()
     data = None
 
-    # Define the mapping of values to hex color codes
-
-    # color_mapping = {
-    #     2: "#ffffb2",
-    #     5: "#f45629",
-    #     4: "#feb751",
-    #     6: "#bd0026",
-    # }
-
+    # Define colormapping
     color_mapping = {
         2: (255, 255, 178, 1),
         5: (244, 86, 41, 1),
@@ -272,29 +297,10 @@ def make_veg_dist_status_visual(filepath, filename):
         0: (255, 255, 255, 0)
     }
 
-    with rio.open(filename, 'w', **meta) as dst:
+    with rio.open(out_dir+filename, 'w', **meta) as dst:
         dst.write(array, indexes=1)
         dst.write_colormap(1, color_mapping)
         nodata=0
-        #dst.write_mask(array)
-        #cmap = dst.colormap(1)
-
-
-    # VEG_DIST_STATUS_dataset = rio.open(
-    #     str(filename),
-    #     'w',
-    #     driver='GTiff',
-    #     height=3660,
-    #     width=3660,
-    #     count=1,
-    #     dtype=expanded_array.dtype,
-    #     crs=crs,
-    #     transform=transform,
-    #     nodata=0
-    # )
-
-    # VEG_DIST_STATUS_dataset.write(expanded_array)
-    # VEG_DIST_STATUS_dataset.close() 
 
     print(filename+' written successfully.')
 
@@ -313,7 +319,9 @@ def make_hls_true_color(filepath, bandlist, filename):
 
     print('making hls true color rendering...')
 
-    #test first to see if there is only one or multiple files. If multiple perform a merge of the files
+    # make output subdirectory, if not already present
+    out_dir = 'tifs/'
+    os.makedirs(os.path.dirname(out_dir), exist_ok=True)
 
     for i,b in enumerate(bandlist):
         band = filepath+b+'.tif'
@@ -348,7 +356,7 @@ def make_hls_true_color(filepath, bandlist, filename):
     cube = np.stack((redClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
 
     RGB_dataset = rio.open(
-        str(filename),
+        str(out_dir+filename),
         'w',
         driver='GTiff',
         height=cube.shape[1],
@@ -363,7 +371,7 @@ def make_hls_true_color(filepath, bandlist, filename):
     RGB_dataset.close() 
 
     print(filename+' written successfully.')
-    return              
+    return                     
 
 def make_hls_false_color(filepath, bandlist, filename):
     '''
@@ -376,6 +384,10 @@ def make_hls_false_color(filepath, bandlist, filename):
                 No returns. Saves .tif file locally.
     '''
     print('making false color rendering...')
+
+    # make output subdirectory, if not already present
+    out_dir = 'tifs/'
+    os.makedirs(os.path.dirname(out_dir), exist_ok=True)
 
     for i,b in enumerate(bandlist):
         band = filepath+b+'.tif'
@@ -410,7 +422,7 @@ def make_hls_false_color(filepath, bandlist, filename):
     cube = np.stack((nirClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
 
     NBG_dataset = rio.open(
-        str(filename),
+        str(out_dir+filename),
         'w',
         driver='GTiff',
         height=cube.shape[1],
@@ -439,6 +451,10 @@ def make_hls_ndvi(filepath, bandlist, filename):
     '''
     
     print('making ndvi rendering...')
+
+    # make output subdirectory, if not already present
+    out_dir = 'tifs/'
+    os.makedirs(os.path.dirname(out_dir), exist_ok=True)
 
     for i,b in enumerate(bandlist):
             
@@ -477,7 +493,7 @@ def make_hls_ndvi(filepath, bandlist, filename):
         cube = np.reshape(ndviClipped_scaled, (1, ndviClipped_scaled.shape[0], ndviClipped_scaled.shape[1])).astype('uint8')
         
         NDVI_dataset = rio.open(
-            str(filename),
+            str(out_dir+filename),
             'w',
             driver='GTiff',
             height=cube.shape[1],
@@ -524,25 +540,7 @@ def mask_rasters(merged_VEG_ANOM_MAX, merged_VEG_DIST_DATE, merged_VEG_DIST_STAT
     
     return masked_VEG_ANOM_MAX, masked_VEG_DIST_DATE, masked_VEG_DIST_STATUS
 
-def merge_multiband_rasters(filepaths, bandlist, filename):
-    
-    #make a rasterio object in memory that is a multiband raster
-    vrts = []
-    for file in filepaths:
-        bands = []
-        for band in bandlist:
-            bands.append(file+band+'.tif')
-        
-        #make gdalVRT
-        vrts.append(gdal.BuildVRT('', bands, separate=True))
-
-    merged_vrt = gdal.BuildVRT('', vrts, separate=False)
-    
-    gdal.Translate(filename, merged_vrt, format='GTiff')
-    
-    return merged_vrt
-
-def merge_rasters(input_files, output_file):
+def merge_rasters(input_files, output_file, write=True):
     """
     Function to take a list of raster tiles, mosaic them using rasterio, and output the file.
     :param input_files: list of input raster files 
@@ -563,11 +561,11 @@ def merge_rasters(input_files, output_file):
                     "transform": out_trans
                     }
                     )
+    if write==True:
+        with rio.open(output_file, 'w', **out_meta) as dst:
+            dst.write(mosaic)
 
-    with rio.open(output_file, 'w', **out_meta) as dst:
-        dst.write(mosaic)
-
-    #Close the input rasters
+        #Close the input rasters
     for src in src_files:
         src.close()
     
@@ -675,6 +673,7 @@ def time_and_area_cube(dist_status, dist_date, veg_anom_max, anom_threshold, pix
     return area_extent
 
 def transform_data_for_folium(url=[]):
+
     '''
     Returns data that is tranformed to be read correctly by Folium.
             Parameters:
@@ -688,3 +687,129 @@ def transform_data_for_folium(url=[]):
     colormap = mpl.colormaps["hot_r"]
     
     return reproj, colormap
+
+### Functions below this point are in-progress ###
+
+def merge_and_stack_geotiffs(input_files, bandlist, output_file):
+    
+    # Get a list of the full file paths for each single band raster
+    all_filepaths = []
+    for file in input_files:
+        filepaths = []
+        for band in bandlist:
+            filepaths.append(file+band+'.tif')
+        all_filepaths.append(filepaths)
+
+    merged_data = {}
+    
+    for filepath in all_filepaths:
+        for file in filepath:
+            band_suffix = file.split('.')[-2]
+            if band_suffix not in merged_data:
+                merged_data[band_suffix] = []
+
+    for filepath in all_filepaths:
+        for file in filepath:
+            band_suffix = file.split('.')[-2]
+            with rio.open(file) as src:
+                data = src.read(1)
+                merged_data[band_suffix].append(data)
+
+    # Merge bands with the same suffix (trying the clipping step here too)
+    for band_suffix, band_data_list in merged_data.items():
+        merged_data[band_suffix] = np.maximum.reduce(band_data_list)
+
+    # Stack the merged bands into a single multi-band array
+    stacked_data = np.stack(list(merged_data.values()), axis=0)
+
+    # # # Update metadata to have the correct number of bands
+    meta = None
+    with rio.open(all_filepaths[0][0]) as src:
+        meta = src.meta.copy()
+        meta.update(count=len(merged_data))
+        
+    # Write the stacked data to the output file
+    with rio.open(output_file, 'w', **meta) as dst:
+        dst.write(stacked_data)
+                                                                                                                                                            
+    return 
+
+def make_rendering(merged_raster, product, output_file):
+    
+    print('making hls true color rendering...')
+
+    # make output subdirectory, if not already present
+    out_dir = 'tifs/'
+    os.makedirs(os.path.dirname(out_dir), exist_ok=True)
+
+    # get crs and transform
+    with rio.open(merged_raster, mode='r') as src:
+        transform = src.transform
+        crs = src.crs
+        nir = src.read(1)
+        red = src.read(2)
+        green = src.read(3)
+        blue = src.read(4)
+
+        nirClipped = clipPercentile(nir)
+        redClipped = clipPercentile(red)
+        greenClipped = clipPercentile(green)
+        blueClipped = clipPercentile(blue)
+        nirClipped_scaled = scaleto255(nirClipped)
+        redClipped_scaled = scaleto255(redClipped)
+        greenClipped_scaled = scaleto255(greenClipped)
+        blueClipped_scaled = scaleto255(blueClipped)
+
+        #compute NDVI
+        ndvi = (nir - red) / (nir + red)
+        mask = (ndvi > 0) & (ndvi < 1)
+        ndvi_cor = np.ma.masked_array(ndvi, ~mask)
+        
+        ndviClipped = clipPercentile(ndvi_cor)
+        ndviClipped_scaled = scaleto255(ndviClipped)
+    
+    if product == 'true':
+       cube = np.stack((redClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
+       dataset = rio.open(
+            str(out_dir+output_file),
+            'w',
+            driver='GTiff',
+            height=cube.shape[1],
+            width=cube.shape[2],
+            count=3,
+            dtype=cube.dtype,
+            crs=crs,
+            transform=transform
+            )
+    elif product == 'false':
+       cube = np.stack((nirClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
+       dataset = rio.open(
+            str(out_dir+output_file),
+            'w',
+            driver='GTiff',
+            height=cube.shape[1],
+            width=cube.shape[2],
+            count=3,
+            dtype=cube.dtype,
+            crs=crs,
+            transform=transform
+            )
+    elif product == 'ndvi':
+        cube = np.reshape(ndviClipped_scaled, (1, ndviClipped_scaled.shape[0], ndviClipped_scaled.shape[1])).astype('uint8')
+        dataset = rio.open(
+            str(out_dir+output_file),
+            'w',
+            driver='GTiff',
+            height=cube.shape[1],
+            width=cube.shape[2],
+            count=1,
+            dtype=cube.dtype,
+            crs=crs,
+            transform=transform
+        )
+
+    dataset.write(cube)
+    dataset.close() 
+
+    print(output_file+' written successfully.')
+    return

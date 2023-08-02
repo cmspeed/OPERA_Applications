@@ -10,18 +10,24 @@ This repository provides a collection of interactive notebooks to the OPERA Prod
 2. [Usage: How to Run a Jupyter Notebook](#usage-how-to-run-a-jupyter-notebook)
 3. [Jupyter Notebooks](#jupyter-notebooks)
     - [CSLC](#cslc)
-        - [Discover](#discover)
+        - [Discover](#discover-cslc)
     - [DSWx](#dswx)
-        - [Discover](#discover)
+        - [Discover](#discover-dswx)
         - [Flood](#flood)
         - [Reservoir](#reservoir)
         - [Mosaics](#mosaics)
     - [DIST](#dist)
-        - [Wildfire](#wildfire)
+        - [DIST-ALERT](#dist-alert)
+            - [Discover](#dist-alert-discover)
+            - [Wildfire](#dist-alert-wildfire)
+        - [DIST-ANN](#dist-ann)
+            - [Discover](#dist-ann-discover)
+            - [Wildfire](#dist-ann-wildfire)
+            - [Land-Use Change](#dist-ann-land-use-change)
     - [RTC](#rtc)
 4. [Key Contributors](#key-contributors)
 
-## Software Dependencies and Installation
+## Software Dependencies and Installation <a name="software-dependencies-and-installation"></a>
 
 This repository can be run by clicking on the Binder logo above or running on your local machine. For the required dependencies, we strongly recommend using [Anaconda](https://www.anaconda.com/products/distribution) package manager for easy installation of dependencies in the python environment. Below we outline how to access and manipulate this repository on your local machine using conda. <br>
 First, download/clone the repository.
@@ -34,7 +40,7 @@ Run the commands below to create a new conda environment `opera_app` and activat
 conda env create -f environment.yml
 conda activate opera_app
 ```
-## Usage: How to Run a Jupyter Notebook
+## Usage: How to Run a Jupyter Notebook <a name="usage-how-to-run-a-jupyter-notebook"></a>
 
 Start the notebook server from the command line (using Terminal on Mac/Linux, Command Prompt on Windows) by running:
 
@@ -52,13 +58,13 @@ The Jupyter Notebook application will then open in your default web browser to t
 **Note:** For easy navigation, it is suggested to start a notebook server in the highest level directory in your file system that contains notebooks. See the Jupyter documentation on [Running the Notebook](https://docs.jupyter.org/en/latest/running.html) for additional details.
 
 ------
-## Jupyter Notebooks
-### CSLC
+## Jupyter Notebooks <a name="jupyter-notebooks"></a>
+### CSLC <a name="cslc"></a>
 The OPERA CSLC-S1 product provides geocoded burst-wise complex data containing both the amplitude and phase information from Sentinel-1 (S1). More information about OPERA CSLC-S1 is available at https://www.jpl.nasa.gov/go/opera/products/cslc-product-suite. Also refer to the CSLC Product white paper [[here](https://d2pn8kiwq2w21t.cloudfront.net/documents/finalCSLC_URS310287.pdf)] for high-level information.
 
 Below describes the subdirectories within the CSLC folder.
 
-#### Discover
+#### Discover <a name="discover-cslc"></a>
 This [discover directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/CSLC/Discover) contains Jupyter notebooks that showcase how to interface with CSLC products.
 
     .
@@ -67,12 +73,12 @@ This [discover directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tr
     │   └── Create_Interferogram_by_streaming_CSLC-S1.ipynb    # Access CSLC via S3
     └── ...
     
-### DSWx
+### DSWx <a name="dswx"></a>
 The OPERA DSWx product maps pixel-wise surface water detections using the Harmonized Landsat-8 Sentinel-2 A/B (HLS) data. More information about OPERA DSWx is available at https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite. Also refer to the DSWx Product white paper [[here](https://d2pn8kiwq2w21t.cloudfront.net/documents/finalDSWx_URS306072_9n6sBVQ.pdf)] for high-level information.
 
 Below describes the subdirectories within the DSWx folder.
 
-#### Discover
+#### Discover <a name="discover-dswx"></a>
 This [discover directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DSWx/Discover) contains Jupyter notebooks that showcase how to interface with DSWx products.
 
     .
@@ -83,7 +89,7 @@ This [discover directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tr
     │   └── Stream_and_Viz_DSWx-HLS_viaDirectHTTPS.ipynb    # Access DSWx via Direct HTTPS
     └── ...
 
-#### Flood
+#### Flood <a name="flood"></a>
 The [flood directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DSWx/Flood) contains a Jupyter notebook that generates flood maps using provisional DSWx products over Pakistan.
 
     .
@@ -91,24 +97,8 @@ The [flood directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/m
     ├── Flood                             
     │   └── DSWx_FloodProduct.ipynb                # Create flood map using DSWx from the cloud
     └── ...
-    
-#### Mosaics
-This [mosaics directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DSWx/Mosaics) demonstrates how PO.DAAC can be programmatically queried for DSWx data over a given region, for a specified time period. The returned DSWx granules are mosaicked to return a single raster image. As motivating examples, we demonstrate this over the state of California and the entireity of Australia.
 
-    .
-    ├── ...
-    ├── Mosaics                              
-    │   ├── notebooks
-    │   │   └── Create-mosaics.ipynb           # Notebook to query PO.DAAC for DSWx data and mosaic returned granules
-    │   ├── data
-    │   │   ├── shapefiles                     # Shapefiles used to query PO.DAAC
-    │   │   ├── australia                      # Folder containing example mosaicked raster over Australia
-    │   │   └── california                     # Folder containing example mosaicked raster over CA
-    │   ├── README.md
-    │   └── environment.yml                    # YAML file containing dependencies needed to run code in this folder
-    └── ...
-
-#### Reservoir
+#### Reservoir <a name="reservoir"></a>
 This [reservoir directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DSWx/Reservoir) contains Jupyter notebooks that demonstrate reservoir monitoring applications of provisional DSWx products over Lake Mead, NV. 
 
     .
@@ -124,12 +114,30 @@ This [reservoir directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/t
     │       └── bufferlakebnds/                # Buffered Lake Mead lake bounds shapefile
     └── ...
 
-### DIST
+#### Mosaics <a name="mosaics"></a>
+This [mosaics directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DSWx/Mosaics) demonstrates how PO.DAAC can be programmatically queried for DSWx data over a given region, for a specified time period. The returned DSWx granules are mosaicked to return a single raster image. As motivating examples, we demonstrate this over the state of California and the entireity of Australia.
+
+    .
+    ├── ...
+    ├── Mosaics                              
+    │   ├── notebooks
+    │   │   └── Create-mosaics.ipynb           # Notebook to query PO.DAAC for DSWx data and mosaic returned granules
+    │   ├── data
+    │   │   ├── shapefiles                     # Shapefiles used to query PO.DAAC
+    │   │   ├── australia                      # Folder containing example mosaicked raster over Australia
+    │   │   └── california                     # Folder containing example mosaicked raster over CA
+    │   ├── README.md
+    │   └── environment.yml                    # YAML file containing dependencies needed to run code in this folder
+    └── ...
+### DIST <a name="dist"></a>
 The OPERA DIST product maps per pixel vegetation disturbance (specifically, vegetation cover loss) from the Harmonized Landsat-8 Sentinel-2 A/B (HLS) data. More information about OPERA DIST is available at https://www.jpl.nasa.gov/go/opera/products/dist-product-suite. Also refer to the DIST Product white paper [[here](https://d2pn8kiwq2w21t.cloudfront.net/documents/finalDIST_URS306040_a3pKEmP.pdf)] for high-level information.
 
 Below describes the subdirectories within the DIST folder.
 
-#### Discover
+#### DIST-ALERT <a name="dist-alert"></a>
+The OPERA DIST-ALERT product...
+
+#### Discover <a name="dist-alert-discover"></a>
 This [discover directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DIST/Discover) contains Jupyter notebooks that showcase how to interface with DIST products.
 
     .
@@ -139,7 +147,7 @@ This [discover directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tr
     │   └── Stream_and_Viz_DIST_Functions.py          # DIST functions
     └── ...
 
-#### Wildfire
+#### Wildfire <a name="dist-alert-wildfire"></a>
 This [wildfire directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tree/main/DIST/Wildfire) contains Jupyter notebooks that demonstrate widlfire applicaitons of DIST products.
 
     .
@@ -151,7 +159,17 @@ This [wildfire directory](https://github.com/OPERA-Cal-Val/OPERA_Applications/tr
     │       └── McKinney_NIFC                  # Perimeter of 2022 McKinney wildfire
     └── ...
 
-### RTC
+
+#### DIST-ANN <a name="dist-ann"></a>
+The OPERA DIST-ANN product...
+
+##### Discover <a name="dist-ann-discover"></a>
+
+##### Wildfire <a name="dist-ann-wildfire"></a>
+
+##### Land-use Change <a name="dist-ann-land-use-change"></a>
+
+### RTC <a name="rtc"></a>
 The RTC-S1 product is a Level 2 product that contains Sentinel-1 backscatter normalized with respect to the topography and projected onto pre-defined UTM/Polar stereographic map projection systems. The Copernicus global 30 m (GLO-30) Digital Elevation Model (DEM) is the reference DEM used to correct for the impacts of topography and to geocode the product. The RTC product maps signals largely related to the physical properties of the ground scattering objects, such as surface roughness and soil moisture and/or vegetation. The product is provided in a GeoTIFF file format and has a resolution of 30 m. All products will be accessible through the Alaska Satellite Facility Distributed Active Archive Center (ASF DAAC).
 
 Below describes the subdirectories within the RTC folder.

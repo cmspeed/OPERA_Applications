@@ -203,19 +203,20 @@ def getbasemaps():
 
     return basemaps
 
-def get_pixel_value_at_coordinate(filepath, coords):
+def get_pixel_value_at_coordinate(filepath, coords, output_epsg):
     '''
     Get pixel value for an input geotiff and coordinate location.
             Parameters:
                     filepath (url): Path to the location of the geotiff
                     coords (list): Coordinate lat,lon
+                    output_epsg (int): EPSG code for the raster data
             Returns:
                 Single pixel value (for a single banded raster)
     '''
     # Create a coordinate transformer
     EPSG_WGS84 = 4326
-    EPSG_UTMZ10 = 32610
-    transformer = Transformer.from_crs(EPSG_WGS84, EPSG_UTMZ10, always_xy=True)
+
+    transformer = Transformer.from_crs(EPSG_WGS84, output_epsg, always_xy=True)
 
     # Convert the input latitude and longitude to EPSG 3857
     x, y = transformer.transform(coords[1], coords[0])
@@ -236,14 +237,6 @@ def handle_draw(target, action, geo_json):
     Neccessary for returning user-defined AOI in interactive map
     '''
     return
-
-# Event handler for the on_interaction event
-# def handle_interaction(marker,**kwargs):
-#     if kwargs.get('type') == 'click':
-#         lat, lon = kwargs.get('coordinates')
-#         marker.location = (lat, lon)
-#         print('The location you specified correponds to the lat/lon', lat, lon)
-#     return 
 
 def intersection_percent(item, aoi):
     '''

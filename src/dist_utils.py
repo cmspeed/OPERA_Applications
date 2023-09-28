@@ -684,7 +684,17 @@ def transform_data_for_folium(url=[]):
 ### Functions below this point are in-progress ###
 
 def merge_and_stack_geotiffs(input_files, bandlist, output_file):
-    
+    '''
+    Produces a merged multiband raster from individual multiband rasters.
+            Parameters:
+                    input_files (list): List of url roots
+                    For example, ['https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/HLSL30.020/HLS.L30.T21LZH.2022175T133807.v2.0/HLS.L30.T21LZH.2022175T133807.v2.0.']
+                    bandlist (list): List of bands ['B04', 'B03', 'B02']
+                    output_file: filepath and name with file extension (e.g., .tif)
+            Returns:
+                    None
+    '''
+
     # Get a list of the full file paths for each single band raster
     all_filepaths = []
     for file in input_files:
@@ -727,8 +737,17 @@ def merge_and_stack_geotiffs(input_files, bandlist, output_file):
                                                                                                                                                             
     return 
 
-def make_rendering(merged_raster, product, output_file):
-    
+def make_rendering(raster, product, output_file):
+    '''
+    Produces a rendered version of an input raster.
+            Parameters:
+                    raster (raster): full filepath for input raster.
+                    product (str): type of output ('true', 'false', 'ndvi')
+                    output_file: filepath and name with file extension (e.g., .tif)
+            Returns:
+                    None
+    '''
+
     print('making hls true color rendering...')
 
     # make output subdirectory, if not already present

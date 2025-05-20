@@ -102,8 +102,9 @@ from pst_dolphin_utils import (
     load_gdal,
     process_blocks,
     warp_to_match,
+    calculate_cumulative_displacement,
 )
-from pst_ts_utils import calculate_cumulative_displacement
+#from pst_ts_utils import calculate_cumulative_displacement
 from tile_mate.stitcher import DATASET_SHORTNAMES
 
 OPERA_DATASET_ROOT = './'
@@ -570,7 +571,11 @@ def save_stack(
     
     # Use all available CPUs if not specified
     if n_workers is None:
-        n_workers = len(psutil.Process().cpu_affinity())
+        try:
+            n_workers = len(psutil.Process().cpu_affinity())
+        except:
+            print('Using 10 Workers/CPU by default, this can be modify by adding the argument --n-workers XX')
+            n_workers = 10
 
     # Process files in chunks to manage memory
     for chunk_start in range(0, len(file_list), chunk_size):
@@ -1051,7 +1056,11 @@ def prepare_average_stack(outfile, stack, lyr_name, file_type, metadata,
     water_mask=None, n_workers=None):
     """Average and export specified layers with parallel processing"""
     if n_workers is None:
-        n_workers = len(psutil.Process().cpu_affinity())
+        try:
+            n_workers = len(psutil.Process().cpu_affinity())
+        except:
+             print('Using 10 Workers/CPU by default, this can be modify by adding the argument --n-workers XX')
+             n_workers = 10            
 
     # Get the data variable and compute mean
     avg_data = getattr(stack, lyr_name)
@@ -1440,9 +1449,14 @@ def main(iargs=None):
     mintpy_prepare_geometry(geom_file, product_files[0], geom_dir=inps.geom_dir,
         metadata=meta, water_mask_file=inps.water_mask_file)
 
-    ncpus = len(psutil.Process().cpu_affinity())    # number of available CPUs
-    if inps.n_workers:
+    if hasattr(inps, 'n_workers') and inps.n_workers:
         ncpus = inps.n_workers
+    else:
+        try:
+            ncpus = len(psutil.Process().cpu_affinity())  # number of available CPUs
+        except Exception:
+            print("Using 10 workers/CPUs by default. This can be modified with the argument --n-workers XX.")
+            ncpus = 10
 
     # prepare mask layer outputs
     avg_dir = os.path.join(inps.out_dir, 'avg_lyrs')

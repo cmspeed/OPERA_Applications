@@ -30,6 +30,7 @@ dependencies:
   - numba=0.55.1
   - numpy=1.21.6
   - panel=0.13.1
+  - packaging=24.0
   - pip
   - pystac-client==0.5.1
   - python>=3.10

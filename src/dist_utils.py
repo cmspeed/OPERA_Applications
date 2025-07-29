@@ -343,7 +343,7 @@ def make_hls_true_color(filepath, bandlist, filename):
     greenClipped_scaled = scaleto255(greenClipped)
     blueClipped_scaled = scaleto255(blueClipped)
     
-    cube = np.stack((redClipped_scaled, blueClipped_scaled, greenClipped_scaled)).astype('uint8')
+    cube = np.stack((redClipped_scaled, greenClipped_scaled, blueClipped_scaled)).astype('uint8')
 
     RGB_dataset = rio.open(
         str(filename),
